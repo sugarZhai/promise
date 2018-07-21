@@ -1,0 +1,177 @@
+<!DOCTYPE>
+<html lang="en">
+<meta charset="utf-8" />
+
+<head>
+    <title>我只是测试</title>
+</head>
+
+<body>
+    <script>
+        $http.get(url).success((res) => {
+            if (success) {
+                success(res)
+            }
+        }).error((err) => {
+            if (error) {
+                error(err)
+            }
+        })
+        success = (data) => {
+            if (data.id !== 0) {
+                let url = "getdata/data?id=" + data.id + "";
+                $http.get(url).success((res) => {
+                    showData(res)
+                }).error((err) => {
+                    if (error) {
+                        error(err)
+                    }
+                })
+            }
+        }
+    </script>
+    <script>
+        $http.get(url).then((data) => {
+            if (res.id !== 0) {
+                let url = "getdata/res?id=" + res.id + "";
+                return $http.get(data)
+            }
+        }).then(success((res) => {
+            showData(res)
+            console.log("resolved:", res);
+        }), error((err) => {
+            console.log("rejected:", err)
+        }))
+    </script>
+    <script>
+        setTimeout(() => {
+            console.log(1)
+        }, 0);
+        new Promise(executor((resolve)=>{
+            console.log(2)
+            for(let i=0;i<1000;i++){
+                i===999&&resolve();
+            }
+            console.log(3)
+        }).then(()=>{
+            console.log(4)
+        }));
+        console.log(5)
+        //2 3 5 4 1    resolve()=>同步其他流程=>then()=>setTimeout()
+        //首先setTimeout()在定时结束后将传递这个函数放到任务队列,最后一步执行
+        // 然后是一个Promise,直接执行 2、3
+        //promise的then应当会放到tick的最后，但是还是在当前tick中
+        //因此先 5后 4，最后到下一个tick 1
+    </script>
+    <script>
+        // jquery的ajax返回的是deferred对象，
+        //通过promise的resolve()方法将其转换为promise对象
+        let jsPromise=Promise.resolve($.ajax('/whatever.json'));
+    </script>
+    <script>
+    //   1、Promise.all方法用于将多个Promise实例，包装成一个新的Promise实例，
+    //   2、Promise.all()方法接收一个数组作为参数，数组的元素都是Promise对象的实例
+    //   如果不是，就会先调用下面讲到的Promise.resolve方法，将参数转为Promise实例，再进一步处理
+    //   3、Promise.all()方法的参数可以不是数组，但必须具有Iterator接口，且返回的每个成员都是Promise实例
+    // let p=Promise.all([p1,p2,p3]);
+    // p的状态有p1,p2,p3决定，分为两种情况。
+    // 1、当该数组的所有的Promise实例都进入Fullfilled状态：Promise.all**返回的实例才会变成Fullfilled状态
+    // 并将Promise实例数组的所有返回值组成一个数组，传递给Promise.all返回实例的回调函数**
+    // 2、当该数组里的某个Promise实例都进入Reject状态：Promise.all返回的实例会立即变成Reject状态，并将第一个rejected的实例返回值
+    // 传递给Promise.all返回实例的都进入Rejected状态：Promise.all返回的实例会立即变成Rejected状态。并将第一个rejected的实例
+    // 返回值传递给Promise.all返回实例的回调函数
+    </script>
+    <script>
+        const promise1=new Promise((resolve,reject)=>{
+            setTimeout(()=>{
+                resolve('success')
+            },1000)
+        })
+        const promise2=promise1.then(()=>{
+            throw new Error('error!!!')
+        })
+        console.log('promise1',promise1)
+        console.log('promise2',promise2)
+        setTimeout(()=>{
+          console.log('promise1',promise1)
+          console.log('promise2',promise2)
+        },2000)
+    </script>
+    <script>
+        const promise=new Promise((resolve,reject)=>{
+            setTimeout(()=>{
+                console.log('once')
+                resolve('success')
+            },1000)
+        })
+
+        const start=Date.now()
+        promise.then((res)=>{
+            console.log(res,Date.now()-start)
+        })
+        promise.then((res)=>{
+            console.log(res,Date.now()-start)
+        })
+        //once
+        //success 1001
+        //success 1001
+//promise的then或者.catch可以被调用多次，但这里Promise构造函数只执行一次，
+//或者说Promise内部状态一经改变，并且有了一个值，
+//那么后续每次调用.then或者catch都会直接拿到该值
+    </script>
+    <script>
+        const promise=Promise.resolve()
+        .then(()=>{
+            return promise
+        })
+        promise.catch(console.error)
+        //TypeError
+        //.then或.catch返回的值不能是promise本身，否则会造成死循环
+    </script>
+    <script>
+        Promise.resolve(1)
+        .then(2)
+        .then(Promise.resolve(3))
+        .then(console.log)
+        //1
+        //.then或者.catch的参数期望是函数，传入非函数则会发生值穿透
+    </script>
+    <script>
+        Promise.resolve()
+        .then(success((res)=>{
+            throw new Error('error')
+        }),fail((e)=>{
+            console.log('fail1:',e)
+        }))
+        .catch(fail2((e)=>{
+            console.log('fail2:',e)
+        }))
+        //fail2:Error:error
+        //at success(...)
+        //原因：.then可以接收两个参数，第一个是处理成功的函数，第二个是处理错误的函数。
+        //.catch是.then第二个参数的简便写法，但是它们用法上有一点需要注意：
+        //.then的第二个处理错误的函数捕获不了第一个处理成功的函数抛出的错误，
+        //而后续的.catch可以捕获之前的错误
+    </script>
+    <script>
+        process.nextTick(()=>{
+            console.log('nextTick')
+        })
+        Promise.resolve()
+         .then(()=>{
+             console.log('then')
+         })
+         setTmmediate(()=>{
+             console.log('setTmmediate')
+         })
+         console.log('end')
+         // end
+         //nextTick
+         //then
+         //setTmmediate
+         //原因：process.nextTick和promise.then都属于macrotask,在事件循环的check阶段执行。
+         //事件循环的每个阶段(macrotask)之间都会执行microtask,事件循环的开始会限制性一次microtask
+    </script>
+</body>
+
+</html>
