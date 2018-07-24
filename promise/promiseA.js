@@ -1,0 +1,226 @@
+(() => {
+  'use strict';
+  // 用于异步执行 onFulfilled/onRejected
+  // `setImmediate` or `function(fn) { setTimeout(fn, 0) }` in browser
+  // `process.nextTick` in node
+  let asyncCall = process.nextTick;
+  // 2.3
+  // Promise解析过程 是以一个promise和一个值做为参数的抽象过程，
+  // 可表示为
+  // [[Resolve]](promise, x)
+  resolve((Promise, x) => {
+      // 2.3.1
+      // 如果promise 和 x 指向相同的值,
+      // 使用 TypeError做为原因将promise拒绝
+      if (promise === x) {
+          return promise.reject(new TypeError('The promise and its value refer to the same object'));
+      }
+      // 2.3.3
+      // 如果x是一个对象或一个函数
+      if (x && (typeof x === 'function' || typeof x === 'object')) {
+          // 2.3.3.3
+          // 如果 resolvePromise 和 rejectPromise 都被调用了，
+          // 或者被调用了多次，则只第一次有效，后面的忽略
+          // // 我们用 called 作为标识防止被多次调用
+          let called = false;
+          let then;
+          try {
+              // 2.3.3.1
+              // 将 then 赋为 x.then
+              then = x.then;
+              if (typeof then === 'function') {
+                  // 2.3.3.3
+                  // 如果 then 是一个函数，
+                  // 以x为this调用then函数，
+                  // 且第一个参数是resolvePromise，
+                  // 第二个参数是rejectPromise
+                  then.call(x, (y) => {
+                      // 2.3.3.3.1
+                      // 当 resolvePromise 被以 y为参数调用,
+                      // 执行 [[Resolve]](promise, y)
+                      if (!called) {
+                          called = true;
+                          resolve(promise, y);
+                      }
+                  }), (r) => {
+                      // 2.3.3.3.2
+                      // 当 rejectPromise 被以 r 为参数调用,
+                      // 则以r为原因将promise拒绝。
+                      if (!called) {
+                          called = true;
+                          promise.reject(r);
+                      }
+                  }
+              } else {
+                  // 2.3.3.4
+                  // 如果 then不是一个函数，则 以x为值fulfill promise
+                  promise.fulfill(x);
+              }
+          } catch (e) {
+              // 2.3.3.2
+              // 如果在取x.then值时抛出了异常，
+              // 则以这个异常做为原因将promise拒绝
+              if (!called) {
+                  called = true;
+                  promise.reject(e);
+              }
+          }
+      } else {
+          // 2.3.4
+          // 如果 x 不是对象也不是函数，
+          // 则以x为值 fulfill promise
+          promise.fulfill(x);
+      }
+  })
+  Taxi = () => {
+      // 0 pending, 1 fulfilled, 2 rejected
+      let _state = 0;
+      let _value;
+      let _onFulFills = [];
+      let _onRejects = [];
+      this.done = (onFulfilled, onRejected) => {
+          if (_state === 0) {
+              // 如果还在pending,先把处理函数存起来
+              _onFulfills.push(onFulfilled);
+              _onRejects.push(onRejected);
+          } else {
+              // 否则,异步执行
+              asyncCall(() => {
+                  if (_state === 1) {
+                      if (typeof onFulfilled === 'function') {
+                          onFulfilled(_value);
+                      }
+                  } else if (typeof onRejected === 'function') {
+                      onRejected(_value);
+                  }
+              })
+          }
+      }
+      /**
+        * 用于this.fulfill和this.reject内部调用的函数
+        * @param  {number} state 0->pending, 1->fulfill, 2->reject
+        * @param  {dynamic} value result 或 reason
+        */
+      function Taxi() {
+          // 0 pending, 1 fulfilled, 2 rejected
+          var _state = 0,
+              _value,
+              _onFulfills = [],
+              _onRejects = [];
+          this.done = function (onFulfilled, onRejected) {
+
+              if (_state === 0) {
+                  // 如果还在pending,先把处理函数存起来
+                  _onFulfills.push(onFulfilled);
+                  _onRejects.push(onRejected);
+              } else {
+                  // 否则,异步执行
+                  asyncCall(function () {
+                      if (_state === 1) {
+                          if (typeof onFulfilled === 'function') {
+                              onFulfilled(_value);
+                          }
+                      } else if (typeof onRejected === 'function') {
+                          onRejected(_value);
+                      }
+                  });
+              }
+          };
+
+          /**
+           * 用于this.fulfill和this.reject内部调用的函数
+           * @param  {number} state 0->pending, 1->fulfill, 2->reject
+           * @param  {dynamic} value result 或 reason
+           */
+          _complete=(state, value)=> {
+              // 只能 fulfill或reject一次, 后面的忽略
+              if (!_state) {
+                  _state = state;
+                  _value = value;
+                  // 根据 state 获取需要处理的函数数组
+                  // 异步执行
+                  asyncCall(() => {
+                      var handlers = state == 1 ? _onFulfills : _onRejects;
+                      handlers.forEach((fn) => {
+                          if (typeof fn === 'function') {
+                              fn(value);
+                          }
+                      });
+                      // 执行完之后,解除数组引用
+                      _onFulfills = null;
+                      _onRejects = null;
+                  });
+              }
+          }
+          this.fulfill = (value) => {
+              _complete(1, value);
+          };
+          this.reject = (value) => {
+              _complete(2, value);
+          };
+      }
+
+      Taxi.prototype = {
+          constructor: Taxi,
+          catch: (onRejected) => {
+              this.then(null, onRejected);
+          },
+          then: (onFulfilled, onRejected) => {
+              // 2.2.7
+              // then 必须返回一个promise
+              // 所以我们new一个,等下用于返回
+              var taxi = new Taxi();
+
+              // this指向当前promise
+              // 2.2.2
+              // 如果onFulfilled是一个函数:
+              // 它必须在promise fulfilled后调用， 且promise的value为其第一个参数。
+              // 2.2.3
+              // 如果onRejected是一个函数,
+              // 它必须在promise rejected后调用， 且promise的reason为其第一个参数。
+              this.done((x) => {
+                  if (typeof onFulfilled === 'function') {
+                      try {
+                          // 2.2.7.1
+                          // 如果onFulfilled 或 onRejected 返回了值x,
+                          // 则执行Promise 解析流程[[Resolve]](promise2, x).
+                          resolve(taxi, onFulfilled(x));
+                      } catch (e) {
+                          // 2.2.7.2
+                          // 如果onFulfilled 或 onRejected抛出了异常e,
+                          // 则promise2应当以e为reason被拒绝
+                          taxi.reject(e);
+                      }
+                  } else {
+                      // 2.2.7.3
+                      // 如果 onFulfilled 不是一个函数且promise1已经fulfilled，
+                      // 则promise2必须以promise1的值fulfilled.
+                      taxi.fulfill(x);
+                  }
+              }, (x) => {
+
+                  if (typeof onRejected === 'function') {
+                      try {
+                          // 2.2.7.1
+                          // 如果onFulfilled 或 onRejected 返回了值x,
+                          // 则执行Promise 解析流程[[Resolve]](promise2, x).
+                          resolve(taxi, onRejected(x));
+                      } catch (e) {
+                          // 2.2.7.2
+                          // 如果onFulfilled 或 onRejected抛出了异常e,
+                          // 则promise2应当以e为reason被拒绝
+                          taxi.reject(e);
+                      }
+                  } else {
+                      // 2.2.7.4
+                      // 如果 OnReject 不是一个函数且promise1已经rejected,
+                      // 则promise2必须以相同的reason被拒绝.
+                      taxi.reject(x);
+                  }
+              });
+              return taxi;
+          }
+      };
+      module.exports = Taxi;
+  }
+})();
